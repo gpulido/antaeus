@@ -16,6 +16,10 @@ class BillingService(
     fun chargeInvoice(invoice : Invoice): Boolean {
         try {
             if (paymentProvider.charge(invoice)) {
+                // update the status after charging. If this fails and the invoice doesn't
+                // get updated, it will stay as Pending although it already has been charge.
+                // So it eventually could be tried to be charged again but we are assumming
+                // that the paymentProvider handles it.
                 invoiceService.updateInvoiceStatus(invoice.id, status = InvoiceStatus.PAID)
                 return true
             }
