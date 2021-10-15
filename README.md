@@ -86,3 +86,51 @@ The code given is structured as follows. Feel free however to modify the structu
 * [Sqlite3](https://sqlite.org/index.html) - Database storage engine
 
 Happy hacking 😁!
+
+
+## Implementation Observations and Decisions
+
+- First session with the code used in reviewing it, understanding all the parts and polish my Kotlin. Start thinking on 
+the problem, solution and architecture needed. 
+
+- There are two main parts / problems: 
+  1) The logic of the call to the paymentProvider and the invoice lifecycle.
+  2) The scheduling part of payments on the first of each month
+ 
+### 1 PaymenProvider and Invoice Lifecycle
+#### Payment provider and status sync
+
+Once we made the charge of an invoice using the PaymentProvider, and if it sucessfull, we have to update the invoice
+status and this could be a problem if there is any problem updating the status in the database, we could face two 
+scenarios:
+ 
+ - the payment is made and the status is not updated, so it will eventually be charged again (bad for the client and 
+our claims department) 
+ - the payment is not made and the status is updated to paid, so it is not charged (bad for us as we are not getting paid)
+
+Both scenarios are bad for the business and have to be taken care of properly by avoiding them. 
+
+We can try to solve the first scenario by updating the status after calling the billing service. If the update fails, the
+invoice with be still "pending" so it maybe be sent to the paymentservice to be charged again.
+However as we know that the paymentservice is an external service, for example a restfull service, we are going to 
+assume that it is protected to several calls to the same endpoint with the same data (i.e. is idempotent).
+If not we should raise a bug to the maintainers of the service to make it idempotent :)
+
+This is also an enforcement of the single responsibility principle.
+
+#### who is responsible marks as unpaid the invoices for the next month?
+
+Once all invoices are paid and the month is "closed", the invoices to the next month should be "created". 
+The billingService should not be worried about that, it only has one task: to charge unpaid invoices.
+
+We can assume that there is another service that generates the new invoices to be paid for the next month for each of the
+customers.
+This service should:
+- Have a log of when each invoice has been charged, this way it could track which invoices generate for the next month.
+- Implement the logic for the invoices that haven't been paid: notify the customer?, remove it? try again? how many times?
+- Generate the new invoices to be paid the next month.
+In order to implement such service changes to the DB structure must be done: A table for the historic payments.
+
+#### Changes
+Creation of a method to update the invoice status. We only expose to change the status instead of all object as the
+invoices should not be changed once they are emitted (they are a sort of immutable object)

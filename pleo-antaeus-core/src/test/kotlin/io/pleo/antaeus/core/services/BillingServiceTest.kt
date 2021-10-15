@@ -25,30 +25,33 @@ class BillingServiceTest {
         every { charge(invoice4)} throws CustomerNotFoundException(invoice4.id)
     }
 
-    private val billingService = BillingService(paymentProvider = paymentProvider)
+    private val invoiceService = mockk<InvoiceService> {
+    }
+
+    private val billingService = BillingService(paymentProvider = paymentProvider, invoiceService = invoiceService)
 
     @Test
     fun `will charge a pending invoice`() {
-        billingService.chargeInvoice(invoice)
-        assertEquals(InvoiceStatus.PAID, invoice.status)
+        val newInvoice: Invoice = billingService.chargeInvoice(invoice)
+        assertEquals(InvoiceStatus.PAID, newInvoice.status)
     }
 
     @Test
     fun `will charge an invoice with wrong currency`() {
-        billingService.chargeInvoice(invoice)
-        assertEquals(InvoiceStatus.PAID, invoice.status)
+        val newInvoice: Invoice = billingService.chargeInvoice(invoice)
+        assertEquals(InvoiceStatus.PAID, newInvoice.status)
     }
 
     @Test
     fun `will delay charging a pending invoice with not balance`() {
-        billingService.chargeInvoice(invoice3)
-        assertEquals(InvoiceStatus.PENDING, invoice.status)
+        val newInvoice: Invoice = billingService.chargeInvoice(invoice3)
+        assertEquals(InvoiceStatus.PENDING, newInvoice.status)
     }
 
     @Test
     fun `will delay charging a pending invoice with missing customer`() {
-        billingService.chargeInvoice(invoice)
-        assertEquals(InvoiceStatus.PAID, invoice.status)
+        val newInvoice: Invoice = billingService.chargeInvoice(invoice)
+        assertEquals(InvoiceStatus.PAID, newInvoice.status)
     }
 
 
