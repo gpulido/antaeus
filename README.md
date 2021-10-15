@@ -131,6 +131,26 @@ This service should:
 - Generate the new invoices to be paid the next month.
 In order to implement such service changes to the DB structure must be done: A table for the historic payments.
 
+#### Currency mismatch management
+
+When an invoice has a different currency than the customer the paymentService refuses to make the charge.
+What to do next is up to the business logic, some options:
+- Don't force the payment and just let it as unpaid. Notify it so it can be handled externally.
+- Use a currency conversion provider to calculate the amount of money from the invoice currency to the customer currency,
+update the invoice with the new data and try to charge it again. We can do this conversion before calling the PaymentProvider
+to avoid the double call to the PaymentProvider. This CurrencyProvider could be an external api as the exact amount 
+probably depends on the exchange values for the day. Also, should it be changed for every month for such invoice
+currency exchange rates are not the same from month to month.
+
+As this requires to be discussed with another "part" (payments), I consider also that in real life this kind of situation
+for a subscription is rare, I will implement the first option. In real life a conversation to clarify requirements 
+is needed.
+
+#### Missing customer management
+
+Again we can decide just to notify the problem. Externally to the BillingService should decide if the invoice has to be
+deleted or fixed.
+
 #### Changes
-Creation of a method to update the invoice status. We only expose to change the status instead of all object as the
-invoices should not be changed once they are emitted (they are a sort of immutable object)
+- Creation of a method to update the invoice status.
+- Creation of a Logging / historical service

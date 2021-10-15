@@ -51,15 +51,14 @@ class AntaeusDal(private val db: Database) {
     }
 
     // We only provide a method to update the status as invoices should be "immutable"
-    fun updateInvoiceStatus(invoiceId: Int, status: InvoiceStatus = InvoiceStatus.PAID): Invoice? {
-        val id = transaction(db) {
-            // Insert the invoice and returns its new id.
+    fun updateInvoiceStatus(invoiceId: Int, status: InvoiceStatus = InvoiceStatus.PAID): Int {
+        return transaction(db) {
+            // Update the invoice
             InvoiceTable
                     .update ({InvoiceTable.id eq invoiceId }){
                         it[this.status] = status.toString()
                     }
         }
-        return fetchInvoice(id)
     }
 
     fun fetchCustomer(id: Int): Customer? {

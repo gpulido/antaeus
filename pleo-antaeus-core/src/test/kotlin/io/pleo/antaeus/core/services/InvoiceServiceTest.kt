@@ -16,6 +16,7 @@ import java.math.BigDecimal
 class InvoiceServiceTest {
     private val dal = mockk<AntaeusDal> {
         every { fetchInvoice(404) } returns null
+        every { updateInvoiceStatus(1, InvoiceStatus.PAID) } returns 0
     }
     private val invoiceService = InvoiceService(dal = dal)
 
@@ -27,9 +28,9 @@ class InvoiceServiceTest {
     }
 
     @Test
-    fun `will update the status of a invoice`() {
-        val invoice = Invoice(1, 1, Money(BigDecimal(10), Currency.EUR), InvoiceStatus.PENDING)
-        val newInvoice = invoiceService.updateInvoiceStatus(invoice, InvoiceStatus.PAID)
-        assertEquals(newInvoice.status, InvoiceStatus.PAID)
+    fun `will throw if invoice is not found when updating `() {
+        assertThrows<InvoiceNotFoundException> {
+            invoiceService.updateInvoiceStatus(1, InvoiceStatus.PAID)
+        }
     }
 }
