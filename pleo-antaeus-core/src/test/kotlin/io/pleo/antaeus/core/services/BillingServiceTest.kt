@@ -26,10 +26,11 @@ class BillingServiceTest {
         every { charge(invoice2)} throws CurrencyMismatchException(invoice2.id, invoice2.customerId)
         every { charge(invoice3)} returns false
         every { charge(invoice4)} throws CustomerNotFoundException(invoice4.id)
+        every { charge(invoice5)} returns true
     }
 
     private val invoiceService = mockk<InvoiceService>(relaxed = true){
-        every { getPendingInvoices()} returns allGoodInvoices
+        every { fetchAllPendingInvoices()} returns allGoodInvoices
     }
 
     private val billingService = BillingService(paymentProvider = paymentProvider, invoiceService = invoiceService)

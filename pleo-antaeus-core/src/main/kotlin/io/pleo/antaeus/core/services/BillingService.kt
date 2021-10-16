@@ -11,7 +11,14 @@ class BillingService(
     private val paymentProvider: PaymentProvider,
     private val invoiceService: InvoiceService
 ) {
-// TODO - Add code e.g. here
+
+    fun chargeAllPendingInvoices(): Int {
+        // We just returns the number of sucessfully done
+        return invoiceService
+                .fetchAllPendingInvoices()
+                .map { if (chargeInvoice(it)) 1 else 0 }
+                .sum()
+    }
 
     fun chargeInvoice(invoice : Invoice): Boolean {
         try {
@@ -21,12 +28,13 @@ class BillingService(
                 // So it eventually could be tried to be charged again but we are assumming
                 // that the paymentProvider handles it.
                 invoiceService.updateInvoiceStatus(invoice.id, status = InvoiceStatus.PAID)
+                //TODO: Maybe notify to a "LoggerService"
                 return true
             }
         }
         catch (e: CustomerNotFoundException)
         {
-            // TODO: Notify and do nothing
+            // TODO: Notify to a "LoggerService"
             return false
         }
         catch (e: CurrencyMismatchException)

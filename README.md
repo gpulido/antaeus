@@ -151,6 +151,8 @@ is needed.
 Again we can decide just to notify the problem. Externally to the BillingService should decide if the invoice has to be
 deleted or fixed.
 
-#### Changes
+#### Changes made outside the BillingService
 - Creation of a method to update the invoice status.
-- Creation of a Logging / historical service
+- Adding a new dal method to retrieve the invoices by state. This allows to filter them using the db
+
+### 2 Scheduling of charge
