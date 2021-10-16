@@ -129,7 +129,7 @@ This service should:
 - Have a log of when each invoice has been charged, this way it could track which invoices generate for the next month.
 - Implement the logic for the invoices that haven't been paid: notify the customer?, remove it? try again? how many times?
 - Generate the new invoices to be paid the next month.
-In order to implement such service changes to the DB structure must be done: A table for the historic payments.
+
 
 #### Currency mismatch management
 
@@ -148,11 +148,54 @@ is needed.
 
 #### Missing customer management
 
-Again we can decide just to notify the problem. Externally to the BillingService should decide if the invoice has to be
-deleted or fixed.
+Again we can decide just to notify the problem. Externally to the BillingService should be decided if the invoice has 
+to be deleted or fixed.
 
 #### Changes made outside the BillingService
 - Creation of a method to update the invoice status.
 - Adding a new dal method to retrieve the invoices by state. This allows to filter them using the db
 
-### 2 Scheduling of charge
+### 2 Scheduling 
+
+With the BillingService taking care of charging the pending invoices, now is time to decide how to expose and call the
+service monthly.
+We need to call it at least for the first day of the month. There are several options:
+
+- Execute a timer in a separate thread  running inside the same application. This timer could be set to execute a 
+function each day that would check if the day is the first of a month: if it is the first of the month it should call the
+chargePendingInvoices method from the BillingService; otherwise it will set another execution the next day. It can make the
+right calculations to avoid drifting. This option is easy to implement, but it would need to keep a long-running thread
+alongside the application. Also, it would couple the "scheduler" with the code, so if we decide to change the charge interval
+to charge each 4 months or yearly, we need to change the code and redeploy the entire app.
+
+- As we have a rest service already running, add an endpoint to allow to execute the method. 
+Then we can use an external scheduler like setting a cron job that just make the call to the endpoint each month (that is very easy to configure in 
+cron) or we can develop a service similar to the timer on the first option but instead of calling the function it can call
+the service, so it is decoupled allowing changes just to the logic of "scheduling" without the need of deploying again.
+It has one con: if we want to implement retries or manage the different scenarios of a failing charge, we will need to
+expand the endpoint to return more information about the "charge invoices" result (not just the number of invoices
+charged for example) or it has to have access to the logging / historical information from the billing service.
+
+- There are more complex solutions using queues or brokers that could be discussed if needed.
+
+I will implement the endpoint solution, returning the number of failing invoices (this way the calling process could at least
+know that something went wrong directly) and adding a NotificationProvider.
+
+#### To retry or not retry (and when)
+
+Every invoice that could not be charged is keep as "pending". So after the first attempt of charging all invoices at the
+first of the month, some of them would be still pending. For this challenge, we are only going to try to
+retry the ones that failed with the NetworkException, and is going to be done immediately following the usual pattern 
+of waiting an incremental amount of time between each call.
+
+#### Generating the new invoices from the subscriptions
+
+For this code, the invoices to be paid each month are already generated, so this code doesn't create new invoices for the
+subscriptions but this is something that has to be done somewhere: every month a new set of invoices for each of the customers
+subscriptions must be generated and store into the db with the "pending" status, so the scheduler could try to charge them.
+Also, any invoice that could not be paid for any reason need to be managed and probably removed from the automatic 
+system, so they don't keep piling up.
+
+The scenario and code presented for the challenge is a very simplify process of a whole customer contract/subscription 
+billing process.
+
