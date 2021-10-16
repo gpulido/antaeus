@@ -7,6 +7,7 @@
 
 package io.pleo.antaeus.app
 
+import getNotificationProvider
 import getPaymentProvider
 import io.pleo.antaeus.core.services.BillingService
 import io.pleo.antaeus.core.services.CustomerService
@@ -60,8 +61,11 @@ fun main() {
     val invoiceService = InvoiceService(dal = dal)
     val customerService = CustomerService(dal = dal)
 
+    val notificationProvider = getNotificationProvider()
     // This is _your_ billing service to be included where you see fit
-    val billingService = BillingService(paymentProvider = paymentProvider, invoiceService = invoiceService)
+    val billingService = BillingService(paymentProvider = paymentProvider,
+                                        invoiceService = invoiceService,
+                                        notificationProvider = notificationProvider)
 
     // Create REST web service
     AntaeusRest(

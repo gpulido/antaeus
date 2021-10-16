@@ -4,6 +4,7 @@ import io.mockk.every
 import io.mockk.mockk
 import io.pleo.antaeus.core.exceptions.CurrencyMismatchException
 import io.pleo.antaeus.core.exceptions.CustomerNotFoundException
+import io.pleo.antaeus.core.external.NotificationProvider
 import io.pleo.antaeus.core.external.PaymentProvider
 import io.pleo.antaeus.models.*
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -33,7 +34,13 @@ class BillingServiceTest {
         every { fetchAllPendingInvoices()} returns allGoodInvoices
     }
 
-    private val billingService = BillingService(paymentProvider = paymentProvider, invoiceService = invoiceService)
+    private val notificationProvider = mockk<NotificationProvider>(relaxed = true){
+    }
+
+    private val billingService = BillingService(paymentProvider = paymentProvider,
+            invoiceService = invoiceService,
+            notificationProvider = notificationProvider
+    )
 
     @Test
     fun `will charge a pending invoice`() {
@@ -58,7 +65,7 @@ class BillingServiceTest {
     @Test
     fun `will charge all pending invoices`(){
         // there are only two invoices that are going to be charged
-        assertEquals(billingService.chargeAllPendingInvoices(), 2)
+        assertEquals(billingService.chargeAllPendingInvoices(), 3)
     }
 
 
