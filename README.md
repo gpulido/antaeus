@@ -181,6 +181,12 @@ charged for example) or it has to have access to the logging / historical inform
 I will implement the endpoint solution, returning the number of failing invoices (this way the calling process could at least
 know that something went wrong directly) and adding a NotificationProvider.
 
+As an example a Schedule independent aplication has been added that will check every day if it is the first of the
+month and use the provided enpoint to make all the charges. This app is very basic and could be also replaced with a 
+monthly cron job with a curl call (for example).
+It has been implemented this way as a starting point to add more logic to the management of failing charges. However the
+that is completely isolated from the billing application
+
 #### To retry or not retry (and when)
 
 Every invoice that could not be charged is keep as "pending". So after the first attempt of charging all invoices at the
@@ -199,3 +205,13 @@ system, so they don't keep piling up.
 The scenario and code presented for the challenge is a very simplify process of a whole customer contract/subscription 
 billing process.
 
+Diary
+- Billing Services
+- Endpoint
+- Parallel and retries
+- Schedule app
+
+Improvements
+Use coroutines, ktor for the client, use environment variables for the api instead of hardcoded
+Error management in client. Add mechanism to ensure that the scheduler is running in case of anormal exit.
+More advanced scheduler using Quartz for example that provides cancellation, persistence, etc...  
