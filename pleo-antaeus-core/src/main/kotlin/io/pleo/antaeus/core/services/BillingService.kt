@@ -8,6 +8,7 @@ import io.pleo.antaeus.core.external.PaymentProvider
 import io.pleo.antaeus.models.Invoice
 import io.pleo.antaeus.models.InvoiceStatus
 import java.time.LocalDateTime
+import java.util.stream.Collectors
 
 class BillingService(
     private val paymentProvider: PaymentProvider,
@@ -16,15 +17,17 @@ class BillingService(
 ) {
 
     fun chargeAllPendingInvoices(): Int {
-        // We just returns the number of sucessfully done
+        // We just returns the number of errors
+        // We use parallelStream to avoid adding kotlinx
         return invoiceService
                 .fetchAllPendingInvoices()
+                .parallelStream()
                 .map { chargeInvoice(it)}
                 .map { if(it) 0 else 1 }
-                .sum()
+                .collect(Collectors.summingInt { it })
     }
 
-    fun chargeInvoice(invoice : Invoice): Boolean {
+    fun chargeInvoice(invoice : Invoice, numRetries: Int = 3, sleepTime: Long = 1000): Boolean {
         try {
             if (paymentProvider.charge(invoice)) {
                 // update the status after charging. If this fails and the invoice doesn't
@@ -50,7 +53,13 @@ class BillingService(
         catch (e: NetworkException)
         {
             // not need to do anything. If needed it will be retried by the calling api
-            return false
+            if (numRetries == 0) {
+                notificationProvider.notifyChargeResult(LocalDateTime.now(), invoice, "NetworkError")
+                return false
+            }
+            // Sleep to try again
+            Thread.sleep(sleepTime)
+            return chargeInvoice(invoice, numRetries-1,  sleepTime * 2 )
         }
         return false
     }
