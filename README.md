@@ -90,35 +90,31 @@ Happy hacking 😁!
 
 ## Implementation Observations and Decisions
 
-- First session with the code used in reviewing it, understanding all the parts and polish my Kotlin. Start thinking on 
-the problem, solution and architecture needed. 
 
 - There are two main parts / problems: 
   1) The logic of the call to the paymentProvider and the invoice lifecycle.
-  2) The scheduling part of payments on the first of each month
+  2) The scheduling part of payments for the first of each month
  
 ### 1 PaymenProvider and Invoice Lifecycle
 #### Payment provider and status sync
 
-Once we made the charge of an invoice using the PaymentProvider, and if it sucessfull, we have to update the invoice
-status and this could be a problem if there is any problem updating the status in the database, we could face two 
+Once we made the charge of an invoice using the PaymentProvider, and if successful, we have to update the invoice
+status and this could problematic if there  is any problem updating the status in the database, we could face two 
 scenarios:
  
  - the payment is made and the status is not updated, so it will eventually be charged again (bad for the client and 
 our claims department) 
- - the payment is not made and the status is updated to paid, so it is not charged (bad for us as we are not getting paid)
+ - the payment is not made and the invoice's status is updated to "paid", so it is not charged (bad for us as we are not getting paid)
 
 Both scenarios are bad for the business and have to be taken care of properly by avoiding them. 
 
-We can try to solve the first scenario by updating the status after calling the billing service. If the update fails, the
-invoice with be still "pending" so it maybe be sent to the paymentservice to be charged again.
-However as we know that the paymentservice is an external service, for example a restfull service, we are going to 
+If we update the status after calling the billing service and the update fails, the invoice with be still "pending" and 
+it will be charged again.
+However, as we know that the paymentservice is an external service, for example a restfull service, we are going to 
 assume that it is protected to several calls to the same endpoint with the same data (i.e. is idempotent).
-If not we should raise a bug to the maintainers of the service to make it idempotent :)
+(If this is not the case we should raise a bug to the maintainers of the service to make it idempotent :) )
 
-This is also an enforcement of the single responsibility principle.
-
-#### who is responsible marks as unpaid the invoices for the next month?
+#### Next month invoices creation responsibility?
 
 Once all invoices are paid and the month is "closed", the invoices to the next month should be "created". 
 The billingService should not be worried about that, it only has one task: to charge unpaid invoices.
@@ -137,23 +133,24 @@ When an invoice has a different currency than the customer the paymentService re
 What to do next is up to the business logic, some options:
 - Don't force the payment and just let it as unpaid. Notify it so it can be handled externally.
 - Use a currency conversion provider to calculate the amount of money from the invoice currency to the customer currency,
-update the invoice with the new data and try to charge it again. We can do this conversion before calling the PaymentProvider
+update the invoice with the new data and try to charge it again. We can make this conversion before calling the PaymentProvider
 to avoid the double call to the PaymentProvider. This CurrencyProvider could be an external api as the exact amount 
-probably depends on the exchange values for the day. Also, should it be changed for every month for such invoice
+probably depends on the exchange values for the day. Also, should it be changed for every month for such invoice?, 
 currency exchange rates are not the same from month to month.
 
-As this requires to be discussed with another "part" (payments), I consider also that in real life this kind of situation
-for a subscription is rare, I will implement the first option. In real life a conversation to clarify requirements 
-is needed.
+As this requires to be discussed with another "part" (payments), I consider  that in real life this kind of situation
+for a subscription is rare, I will implement the first option. A conversation to clarify requirements is needed.
 
 #### Missing customer management
 
 Again we can decide just to notify the problem. Externally to the BillingService should be decided if the invoice has 
-to be deleted or fixed.
+to be deleted or fixed(and how)
 
 #### Changes made outside the BillingService
-- Creation of a method to update the invoice status.
-- Adding a new dal method to retrieve the invoices by state. This allows to filter them using the db
+
+- Creation of a method to update the invoice status in the db.
+- Adding a new dal method to retrieve the invoices by state. This allows to filter them using the db instead of retrieving
+all and them filtering.
 
 ### 2 Scheduling 
 
@@ -166,26 +163,31 @@ function each day that would check if the day is the first of a month: if it is 
 chargePendingInvoices method from the BillingService; otherwise it will set another execution the next day. It can make the
 right calculations to avoid drifting. This option is easy to implement, but it would need to keep a long-running thread
 alongside the application. Also, it would couple the "scheduler" with the code, so if we decide to change the charge interval
-to charge each 4 months or yearly, we need to change the code and redeploy the entire app.
+to charge each 4 months or yearly, we need to change the code and redeploy the entire app. The timer is daily to avoid
+such a long timer (one month) tick that could be problematic. To kick the timer each day is not very expensive and
+provides more moments for fixing things.
 
 - As we have a rest service already running, add an endpoint to allow to execute the method. 
-Then we can use an external scheduler like setting a cron job that just make the call to the endpoint each month (that is very easy to configure in 
-cron) or we can develop a service similar to the timer on the first option but instead of calling the function it can call
-the service, so it is decoupled allowing changes just to the logic of "scheduling" without the need of deploying again.
+Then, we can use an external scheduler like setting a cron job that just make the call to the endpoint each month 
+(that is very easy to configure in cron) or we can develop a service similar to the timer on the first option but instead 
+of calling the function it will made an API call to the service, so it is decoupled allowing to make changes just to the 
+logic of "scheduling" without the need of deploying again.
 It has one con: if we want to implement retries or manage the different scenarios of a failing charge, we will need to
 expand the endpoint to return more information about the "charge invoices" result (not just the number of invoices
-charged for example) or it has to have access to the logging / historical information from the billing service.
+charged for example) or it has to have access to the logging / historical information from the billing service. (could 
+be done using a message bus, a shared database table, a Redis service...)
 
 - There are more complex solutions using queues or brokers that could be discussed if needed.
 
-I will implement the endpoint solution, returning the number of failing invoices (this way the calling process could at least
-know that something went wrong directly) and adding a NotificationProvider.
+I will implement the endpoint solution, returning the number of failing invoices (this way the calling process could at 
+least know that something went wrong directly) and adding a NotificationProvider.
 
-As an example a Schedule independent aplication has been added that will check every day if it is the first of the
-month and use the provided enpoint to make all the charges. This app is very basic and could be also replaced with a 
+As an example a Schedule independent application has been added that will check every day if it is the first of the
+month and use the provided endpoint to make all the charges. This app is very basic and could be also replaced with a 
 monthly cron job with a curl call (for example).
-It has been implemented this way as a starting point to add more logic to the management of failing charges. However the
-that is completely isolated from the billing application
+It has been implemented this way as a starting point to add more logic to the management of failing charges. It doesn't
+have any dependency to the other modules. Just for simplicity of deployment it is being initialized by the main app but
+it could easily set as an standalone app.
 
 #### To retry or not retry (and when)
 
@@ -197,21 +199,44 @@ of waiting an incremental amount of time between each call.
 #### Generating the new invoices from the subscriptions
 
 For this code, the invoices to be paid each month are already generated, so this code doesn't create new invoices for the
-subscriptions but this is something that has to be done somewhere: every month a new set of invoices for each of the customers
-subscriptions must be generated and store into the db with the "pending" status, so the scheduler could try to charge them.
-Also, any invoice that could not be paid for any reason need to be managed and probably removed from the automatic 
-system, so they don't keep piling up.
+subscriptions. As pointed out before this is something that has to be done somewhere: every month a new set of invoices 
+for each of the customers subscriptions must be generated and store into the db with the "pending" status, so the 
+scheduler could try to charge them. Also, any invoice that could not be paid for any reason need to be managed and 
+probably removed from the automatic system, so they don't keep piling up.
 
 The scenario and code presented for the challenge is a very simplify process of a whole customer contract/subscription 
 billing process.
 
-Diary
-- Billing Services
-- Endpoint
-- Parallel and retries
-- Schedule app
+### Implementation process
 
-Improvements
-Use coroutines, ktor for the client, use environment variables for the api instead of hardcoded
-Error management in client. Add mechanism to ensure that the scheduler is running in case of anormal exit.
-More advanced scheduler using Quartz for example that provides cancellation, persistence, etc...  
+It took me about  three sessions of 4 hours to provide the code:
+
+- In the first session I read the problem, the code, analyzed the business logic of the project and thought about some
+approaches to the business problematic and the architecture needed to solve it. I also dusted my kotlin.
+
+- The second session was dedicated to the billingservice implementation. Started with some test (a little of TDD). I 
+came with a basic implementation, and after that start to improve things: Added endpoints,  add parallelism, add 
+notification service, and handle the retries of the app.
+
+- The third session was to the scheduler implementation. Did some research about libraries, and options. I was about to
+use Quartz as task scheduler, but I discarded to be a bit overkill for the challenge.
+
+The readme was being written alongside the code, adding some thoughts and decisions.
+The commit history could be used to follow the entire process, I tried to make clean commits with working code that 
+implements parts of the functionality.
+
+### Improvements
+
+There is a lot of room for improvements and for all little things needed to make it robust. Some of them have been 
+already mentioned above:
+
+- Use / implement a proper notification provider that could store / share / send mails with info of the failing invoice
+charges.
+
+- Use coroutines, flow, ktor for the client, use environment variables for the api instead of hardcoded
+
+- Error management in client. Add mechanism to ensure that the scheduler is running in case of anormal exit.
+
+- More advanced scheduler using Quartz for example that provides cancellation, persistence, etc...
+
+
